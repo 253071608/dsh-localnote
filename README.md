@@ -67,8 +67,8 @@ dsh plugin --profile web add /path/to/dsh-localnote
 ## 卸载
 
 ```sh
-# 从 web 配置档移除
-dsh plugin --profile web remove @253071608/dsh-localnote
+# 从 web 配置档移除（路径换成你 clone 出来的目录）
+dsh plugin --profile web remove /path/to/dsh-localnote
 ```
 
 卸载只影响插件装载，**不会删除你的数据**（灵感仍保存在 `~/.localnote/state.json` 与 `~/.localnote/images/`）。想彻底清数据，删除这两个位置即可（`rm -rf ~/.localnote`）。
