@@ -7,7 +7,7 @@
  * cordis 插件：在 dsh web 服务器上注册 /dsh-localnote/* 的 REST 路由：
  *   - GET    /dsh-localnote/notes              列出所有笔记
  *   - POST   /dsh-localnote/notes              新建笔记 { text }
- *   - PATCH  /dsh-localnote/notes              更新 { id, content }（详情文本）
+ *   - PATCH  /dsh-localnote/notes              更新 { id, text?, content? }（标题/详情）
  *   - PATCH  /dsh-localnote/notes/toggle       切换完成态 { id }
  *   - DELETE /dsh-localnote/notes              删除笔记 { id }
  *   - POST   /dsh-localnote/notes/images       上传图片 { id, dataUrl, name }
