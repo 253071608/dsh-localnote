@@ -1,11 +1,11 @@
 {
   "name": "@253071608/dsh-localnote",
   "version": "0.3.1",
-  "description": "A DeepSeek Harness Web plugin: a corner floating notes panel. Each note has a title, rich detail text, and paste-in screenshots stored as image files. Demonstrates the host(client) plugin split with persistent CRUD over host HTTP routes.",
+  "description": "灵感笔记：常驻浏览器的灵感/待办浮窗插件。随手记录灵感，定时回访，到点由 AI 自动执行并回写结果（任务执行）或仅提醒。",
   "author": "253071608",
   "repository": {
     "type": "git",
-    "url": "https://github.com/253071608/dsh-localnote.git"
+    "url": "https://github.com/253071608/repo.git"
   },
   "type": "module",
   "main": "index.js",

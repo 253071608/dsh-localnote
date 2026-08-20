@@ -1,88 +1,106 @@
-# dsh-localnote
+# 灵感笔记 (dsh-localnote)
 
-一个 **DeepSeek Harness Web 展示型插件**：页面右上角渲染一个「📝 笔记」浮窗面板，可**列出、新建、勾选完成、删除**笔记，并支持**逐条查看/编辑详情**——详情里可写多行文本，还能**直接粘贴截图**保存为图片。
+> **把"以后再说"的灵感，准时摆到你面前：随手记下，到点由 AI 自动替你把它想透、做透，回来只看结果。**
 
-笔记数据由 **host 端（Node）** 持有一份**持久化状态**：
-- 笔记元数据（标题/详情/完成态/图片引用）→ `~/.localnote/state.json`
-- 粘贴的图片 → `~/.localnote/images/` 目录
+一个常驻浏览器的灵感 / 待办浮窗插件：随手记灵感，给它设一个"回访时间"，到点由 AI 自动执行并回写结果，或仅提醒你回来处理。不用一直盯着屏幕。
 
-client 端通过 REST 路由读写。它演示了 DSH 展示型插件的**标准结构**（与本仓库已安装的 `dsh-stock-watch` 等第三方插件一致）：host 持有真实状态 + REST 数据接口，client 渲染页面面板。
+## 功能
+
+- **随手记录**：右上角浮窗随手记灵感，一条 = 标题 + 详情 + 截图图片（详情里直接 Ctrl/Cmd+V 粘贴）。
+- **定时回访**：给任意灵感设置「到期时间 + 到点动作」，到点由插件自动接管，不用你守着。
+- **任务执行**：到点由 AI 把灵感自动展开成结构化成果（理解 → 要点拆解 → 下一步可执行动作），结果直接回写给这条灵感，回来查看即可；可指定模型或使用默认模型。
+- **仅提醒**：到点只弹通知提醒你回来处理，不消耗模型。
+- **不遗漏**：页面浮窗 toast + 后台系统通知双通道，到点提醒不丢；localStorage 去重，刷新页面不重复提醒。
+- **可见状态**：列表实时显示倒计时 / 已执行 / 出错过错状态，详情页查看任务执行报告。
+
+## 架构
+
+与 DSH 展示型插件标准结构一致：**host 持有真实状态 + REST 数据接口，client 渲染页面面板**。
 
 ```
 dsh-localnote/
 ├── package.json        # 声明 dsh.bundle(补丁层) + dsh.client(浏览器端入口)
 ├── cordis.patch.yml    # 把本插件作为一条 loader 配置项插入
-├── index.js            # host 端（Node）：笔记/详情/图片的持久化 + REST 增删查改
-├── client.js           # 浏览器端：在 shell.overlay 槽位渲染笔记面板 + 详情模态框
+├── index.js            # host 端（Node）：持久化状态 + REST 增删改查 + 定时扫描 + agent 执行
+├── client.js           # 浏览器端：在 shell.overlay 槽位渲染灵感面板浮窗
 └── README.md           # 本说明
 ```
 
-## 它做了什么
+### host 端 `index.js`
 
-- **host 端** `index.js`：一个 Cordis 插件，`inject: ['webServer']`，通过 `ctx.webServer.register({ kind: 'prefix', path, handler })` 注册前缀路由，内部按 URL/方法分发：
+一个 Cordis 插件，`inject: ['webServer', 'timer', 'agents']`：
+
+- **REST 路由**（`ctx.webServer.register`）：
 
   | 方法 | 路径 | 作用 |
   |------|------|------|
-  | GET  | `/dsh-localnote/notes` | 列出所有笔记（含详情/图片引用） |
-  | POST | `/dsh-localnote/notes` | 新建笔记 `{ text }`（标题） |
-  | PATCH| `/dsh-localnote/notes` | 更新笔记 `{ id, text?, content? }`（标题/详情） |
-  | PATCH| `/dsh-localnote/notes/toggle` | 切换完成态 `{ id }` |
-  | DELETE | `/dsh-localnote/notes` | 删除笔记 `{ id }`（同时清理其图片文件） |
-  | POST | `/dsh-localnote/notes/images` | 上传图片 `{ id, dataUrl, name }` |
-  | DELETE | `/dsh-localnote/notes/images` | 删除图片 `{ id, file }` |
-  | GET  | `/dsh-localnote/images/:file` | 读取图片文件 |
-  | GET  | `/dsh-localnote/stats` | 统计（总数/已完成） |
+  | GET  | `/dsh-localnote/notes` | 列出所有灵感 |
+  | POST | `/dsh-localnote/notes` | 新建（标题 + 可选详情） |
+  | PATCH| `/dsh-localnote/notes` | 更新标题/详情 |
+  | PATCH| `/dsh-localnote/notes/toggle` | 切换完成态 |
+  | DELETE | `/dsh-localnote/notes` | 删除 |
+  | POST | `/dsh-localnote/notes/images` | 上传图片 |
+  | DELETE | `/dsh-localnote/notes/images` | 删除图片 |
+  | GET  | `/dsh-localnote/images/:file` | 读取图片 |
+  | GET  | `/dsh-localnote/stats` | 统计 |
+  | PATCH| `/dsh-localnote/notes/schedule` | 设置/取消定时（时间 + 动作 + 模型） |
+  | GET  | `/dsh-localnote/models` | 可用模型列表 |
 
-  状态保存在进程闭包里，并持久化。图片以 base64 dataURL 上传后写入 `~/.localnote/images/`，state.json 只保存引用（`file`/`name`/`createdAt`），避免状态文件膨胀。
+- **定时扫描**：`ctx.interval` 每 30s 检查到期灵感，`fireDue` 触发一次后标记 `fired`，避免重复。
+- **任务执行**：到点用 `ctx.agents.create` 开一个一次性 agent 执行任务（走完整 agent 通道，可正常出文），执行完显式 `dispose` 释放；未指定模型时回退 `agentDefaultModel` 的默认模型。结果写回 `note.result`。
 
-- **client 端** `client.js`：浏览器插件，`window.__ModuleLoader__.load({ id, factory })` 打包；`apply(ctx)` 用 `ctx.slots.inject('shell.overlay', ...)` 把 React 面板挂进页面浮图层（additive、可点击）。
-  - 点笔记**标题** → 打开**详情模态框**
-  - 详情框可编辑多行文本，并**监听 `paste` 事件捕获剪贴板截图**自动上传
-  - 图片以 `/dsh-localnote/images/<file>` 展示，可逐张删除
-  - 面板和胶囊支持**拖动**（标题栏按住拖动）
+- **持久化**：`~/.localnote/state.json`（灵感元数据 + schedule/result），图片存 `~/.localnote/images/`。
 
-- **package.json** 的 `dsh.bundle` 让这个包"贡献一条补丁层"，`dsh.client` 让 `dsh-client-modules` 自动发现并加载浏览器端入口。
+### client 端 `client.js`
+
+浏览器插件，`window.__ModuleLoader__.load({ id, factory })` 打包；`apply(ctx)` 用 `ctx.slots.inject('shell.overlay', ...)` 挂进页面浮图层。通过 `fetch` 消费上述路由。
 
 ## 安装
 
-前置：已按 [从源码运行](https://github.com/deepseek-ai/deepseek-harness) 准备好 DSH 仓库并构建好。
+插件的装载由「依赖声明 + loader 配置」两部分完成，入口都在 web 配置档（`~/.dsh/profiles/web/`）：
 
-### 从 GitHub（当前推荐）
+1. **依赖声明**：`~/.dsh/profiles/web/package.json` 的 `dependencies` 里加一行
+   `"@253071608/dsh-localnote": "link:<你本地的插件目录路径>"`（本地目录安装），
+   并把它加进 `dsh.profile.bundles` 数组。
+2. **loader 入口**：插件的 `cordis.patch.yml`（作为 bundle 补丁）把 `dsh-localnote` 作为一条 loader 配置项插入，host 端才会加载 `index.js`；client 端由 `dsh-client-modules` 按 `package.json` 的 `dsh.client` 自动发现 `client.js`。
 
-```sh
-dsh plugin --profile web add github:253071608/dsh-localnote
-```
-
-### 从 npm（暂未发布）
-
-本仓库目前尚未发布到 npm，故 `@253071608/dsh-localnote` 无法通过 `dsh plugin add @253071608/dsh-localnote` 安装（registry 返回 404）。
-已发布后即可使用该命令；在此之前请用上面的 **GitHub** 方式安装。
-
-### 本地源码目录（仅本机开发用）
-
-如果你在本地克隆/保存了源码，也可以直接指向源码目录（放到 `dsh plugin add` 后面的 `本地源码路径` 处，例如 `/path/to/dsh-localnote`）：
+如果发布到 npm 分发，安装方式更简单（无需 `link:`，用包名）：
 
 ```sh
-dsh plugin --profile web add <本地源码路径>
+# 发布后装进 web 配置档
+dsh plugin --profile web @253071608/dsh-localnote
 ```
 
-> 注意：bundle 方式下，插件行在 patch 里按**包名**（`name: '@253071608/dsh-localnote'`）引用，Node 模块解析靠 profile 的 pnpm 依赖定位已安装代码。若再想用 `--patch` 重复插入同一行，会报 `duplicate loader entry id: dsh-localnote`——bundle 本身已提供补丁层，不必重复插入。
+装好后的两种联调：
+- 改动 host 端 `index.js`：需重启 DSH 才生效（`bash start.sh restart`）。
+- 改动 client 端 `client.js`：刷新页面即可；开发迭代可用 `pnpm run dev:web` 走 HMR 自动热更新。
 
-装好后**重启 DSH**，打开 `http://127.0.0.1:3080`，右上角出现「📝 笔记」胶囊；点开即可添加笔记、点标题进详情、粘贴截图。
+## 卸载
+
+从 web 配置档移除本插件，两步都做：
+
+1. **删依赖声明**：编辑 `~/.dsh/profiles/web/package.json`，删除
+   `"@253071608/dsh-localnote": "link:<你本地的插件目录路径>"`（或当初写的任何安装依赖），
+   并把 `@253071608/dsh-localnote` 从 `dsh.profile.bundles` 列表移除。
+2. **重启 DSH**（`bash start.sh restart`），让 loader 不再加载该插件并刷新 `__DSH_BOOT__` 图。
+
+> 若当初是用 `dsh plugin --profile web <包名>`（把参数转交给 pnpm 安装）安装的，卸载用
+> `dsh plugin --profile web remove @253071608/dsh-localnote`。
+>
+> 卸载只影响插件装载，**不会删除你的数据**（灵感仍保存在 `~/.localnote/state.json` 与 `~/.localnote/images/`）。想彻底清数据，删除这两个位置即可（`rm -rf ~/.localnote`）。
 
 ## 验证
 
-- host 端接口：
+- host 接口：
   ```sh
-  curl http://127.0.0.1:3080/dsh-localnote/stats           # {"total":0,"done":0,"open":0}
+  curl http://127.0.0.1:3080/dsh-localnote/notes          # []
   curl -X POST http://127.0.0.1:3080/dsh-localnote/notes \
-       -H 'content-type: application/json' -d '{"text":"hello"}'
-  curl http://127.0.0.1:3080/dsh-localnote/notes           # 新建的笔记
+       -H 'content-type: application/json' -d '{"text":"你好"}'
+  curl http://127.0.0.1:3080/dsh-localnote/stats          # {"total":1,"done":0,"open":1}
   ```
-- 数据文件：`~/.localnote/state.json` 与 `~/.localnote/images/`
+- client：刷新页面，右上角出现「📝 灵感」胶囊，点开即见面板。
 
-## 想加深理解？
+## 常见问题
 
-- [第一个插件 / 工具 / 配置教程](https://github.com/deepseek-ai/deepseek-harness/blob/master/docs/user/develop/basic/index.zh.md)
-- [Cordis 框架教程](https://github.com/deepseek-ai/deepseek-harness/blob/master/docs/cordis-tutorial/index.md)
-- `dsh-stock-watch` 是功能更丰富的同构参考实现（数据面板、K 线、扇形菜单）。
+- 任务执行结果为空 / "模型未返回内容"：确认定时设置里选了模型或用默认模型；agent 执行需要 `{{cwd}}` 有效（插件已内置当前用户家目录）。若仍未出文，看详情里的 `log` 与 `error`。
+- 想改插件的展示名/文案：在 `client.js` 里搜「灵感」相关字符串。
