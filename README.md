@@ -53,11 +53,10 @@ dsh-localnote/
 dsh plugin --profile web add github:253071608/dsh-localnote
 ```
 
-### 发布到 npm 后
+### 从 npm（暂未发布）
 
-```sh
-dsh plugin --profile web add @253071608/dsh-localnote
-```
+本仓库目前尚未发布到 npm，故 `@253071608/dsh-localnote` 无法通过 `dsh plugin add @253071608/dsh-localnote` 安装（registry 返回 404）。
+已发布后即可使用该命令；在此之前请用上面的 **GitHub** 方式安装。
 
 ### 本地源码目录（仅本机开发用）
 
