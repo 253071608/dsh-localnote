@@ -15,14 +15,13 @@
 
 ## 架构
 
-与 DSH 展示型插件标准结构一致：**host 持有真实状态 + REST 数据接口，client 渲染页面面板**。
+一个 DSH host 端插件：** host 持有真实状态 + REST 数据接口 + 定时扫描 + agent 执行**。
 
 ```
 dsh-localnote/
-├── package.json        # 声明 dsh.bundle(补丁层) + dsh.client(浏览器端入口)
+├── package.json        # 声明 dsh.bundle(补丁层)
 ├── cordis.patch.yml    # 把本插件作为一条 loader 配置项插入
 ├── index.js            # host 端（Node）：持久化状态 + REST 增删改查 + 定时扫描 + agent 执行
-├── client.js           # 浏览器端：在 shell.overlay 槽位渲染灵感面板浮窗
 └── README.md           # 本说明
 ```
 
@@ -51,43 +50,28 @@ dsh-localnote/
 
 - **持久化**：`~/.localnote/state.json`（灵感元数据 + schedule/result），图片存 `~/.localnote/images/`。
 
-### client 端 `client.js`
-
-浏览器插件，`window.__ModuleLoader__.load({ id, factory })` 打包；`apply(ctx)` 用 `ctx.slots.inject('shell.overlay', ...)` 挂进页面浮图层。通过 `fetch` 消费上述路由。
-
 ## 安装
 
-插件的装载由「依赖声明 + loader 配置」两部分完成，入口都在 web 配置档（`~/.dsh/profiles/web/`）：
-
-1. **依赖声明**：`~/.dsh/profiles/web/package.json` 的 `dependencies` 里加一行
-   `"@253071608/dsh-localnote": "link:<你本地的插件目录路径>"`（本地目录安装），
-   并把它加进 `dsh.profile.bundles` 数组。
-2. **loader 入口**：插件的 `cordis.patch.yml`（作为 bundle 补丁）把 `dsh-localnote` 作为一条 loader 配置项插入，host 端才会加载 `index.js`；client 端由 `dsh-client-modules` 按 `package.json` 的 `dsh.client` 自动发现 `client.js`。
-
-如果发布到 npm 分发，安装方式更简单（无需 `link:`，用包名）：
+本地安装到 web 配置档，把 `/path/to/dsh-localnote` 换成你 clone 出来的目录：
 
 ```sh
-# 发布后装进 web 配置档
-dsh plugin --profile web @253071608/dsh-localnote
+# 1. 克隆代码
+git clone <仓库地址> /path/to/dsh-localnote
+
+# 2. 本地安装（dsh 会把本地目录作为依赖装进 ~/.dsh/profiles/web/ 并加进 bundles）
+dsh plugin --profile web add /path/to/dsh-localnote
 ```
 
-装好后的两种联调：
-- 改动 host 端 `index.js`：需重启 DSH 才生效（`bash start.sh restart`）。
-- 改动 client 端 `client.js`：刷新页面即可；开发迭代可用 `pnpm run dev:web` 走 HMR 自动热更新。
+改动 host 端 `index.js` 需重启 DSH。
 
 ## 卸载
 
-从 web 配置档移除本插件，两步都做：
+```sh
+# 从 web 配置档移除
+dsh plugin --profile web remove @253071608/dsh-localnote
+```
 
-1. **删依赖声明**：编辑 `~/.dsh/profiles/web/package.json`，删除
-   `"@253071608/dsh-localnote": "link:<你本地的插件目录路径>"`（或当初写的任何安装依赖），
-   并把 `@253071608/dsh-localnote` 从 `dsh.profile.bundles` 列表移除。
-2. **重启 DSH**（`bash start.sh restart`），让 loader 不再加载该插件并刷新 `__DSH_BOOT__` 图。
-
-> 若当初是用 `dsh plugin --profile web <包名>`（把参数转交给 pnpm 安装）安装的，卸载用
-> `dsh plugin --profile web remove @253071608/dsh-localnote`。
->
-> 卸载只影响插件装载，**不会删除你的数据**（灵感仍保存在 `~/.localnote/state.json` 与 `~/.localnote/images/`）。想彻底清数据，删除这两个位置即可（`rm -rf ~/.localnote`）。
+卸载只影响插件装载，**不会删除你的数据**（灵感仍保存在 `~/.localnote/state.json` 与 `~/.localnote/images/`）。想彻底清数据，删除这两个位置即可（`rm -rf ~/.localnote`）。
 
 ## 验证
 
@@ -98,9 +82,6 @@ dsh plugin --profile web @253071608/dsh-localnote
        -H 'content-type: application/json' -d '{"text":"你好"}'
   curl http://127.0.0.1:3080/dsh-localnote/stats          # {"total":1,"done":0,"open":1}
   ```
-- client：刷新页面，右上角出现「📝 灵感」胶囊，点开即见面板。
-
 ## 常见问题
 
 - 任务执行结果为空 / "模型未返回内容"：确认定时设置里选了模型或用默认模型；agent 执行需要 `{{cwd}}` 有效（插件已内置当前用户家目录）。若仍未出文，看详情里的 `log` 与 `error`。
-- 想改插件的展示名/文案：在 `client.js` 里搜「灵感」相关字符串。
