@@ -60,8 +60,10 @@ dsh plugin --profile web add github:253071608/dsh-localnote
 
 ### 本地源码目录（仅本机开发用）
 
+如果你在本地克隆/保存了源码，也可以直接指向源码目录（放到 `dsh plugin add` 后面的 `本地源码路径` 处，例如 `/path/to/dsh-localnote`）：
+
 ```sh
-dsh plugin --profile web add /opt/weber_github/dsh-localnote
+dsh plugin --profile web add <本地源码路径>
 ```
 
 > 注意：bundle 方式下，插件行在 patch 里按**包名**（`name: '@253071608/dsh-localnote'`）引用，Node 模块解析靠 profile 的 pnpm 依赖定位已安装代码。若再想用 `--patch` 重复插入同一行，会报 `duplicate loader entry id: dsh-localnote`——bundle 本身已提供补丁层，不必重复插入。
