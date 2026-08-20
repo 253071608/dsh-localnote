@@ -1,6 +1,6 @@
 {
   "name": "@253071608/dsh-localnote",
-  "version": "0.2.0",
+  "version": "0.3.1",
   "description": "A DeepSeek Harness Web plugin: a corner floating notes/todo panel with persistent CRUD over host HTTP routes. Shows the host(client) plugin split.",
   "author": "253071608",
   "repository": {
