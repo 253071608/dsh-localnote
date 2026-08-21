@@ -52,14 +52,15 @@ dsh-localnote/
 
 ## 安装
 
-本地安装到 web 配置档，把 `/path/to/dsh-localnote` 换成你 clone 出来的目录：
+本地安装到 web 配置档。`dsh` 不是全局命令：它定义在 DSH checkout 根目录的 `package.json`（`scripts.dsh`）里，所以必须**先进入 DSH checkout 根目录**再运行 `pnpm dsh`。把下面 `/path/to/deepseek-harness` 换成你 DSH checkout 的目录、`/path/to/dsh-localnote` 换成你 clone 出来的目录：
 
 ```sh
 # 1. 克隆代码
 git clone <仓库地址> /path/to/dsh-localnote
 
 # 2. 本地安装（dsh 会把本地目录作为依赖装进 ~/.dsh/profiles/web/ 并加进 bundles）
-dsh plugin --profile web add /path/to/dsh-localnote
+cd /path/to/deepseek-harness
+pnpm dsh plugin --profile web add /path/to/dsh-localnote
 ```
 
 改动 host 端 `index.js` 需重启 DSH。
@@ -67,8 +68,8 @@ dsh plugin --profile web add /path/to/dsh-localnote
 ## 卸载
 
 ```sh
-# 从 web 配置档移除（路径换成你 clone 出来的目录）
-dsh plugin --profile web remove /path/to/dsh-localnote
+cd /path/to/deepseek-harness
+pnpm dsh plugin --profile web remove /path/to/dsh-localnote
 ```
 
 卸载只影响插件装载，**不会删除你的数据**（灵感仍保存在 `~/.localnote/state.json` 与 `~/.localnote/images/`）。想彻底清数据，删除这两个位置即可（`rm -rf ~/.localnote`）。
